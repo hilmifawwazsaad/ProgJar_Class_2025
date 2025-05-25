@@ -5,62 +5,60 @@ from file_protocol import FileProtocol
 import concurrent.futures
 import sys
 
-fp = FileProtocol()
+protocol_handler = FileProtocol()
 
-def handle_client(connection, address):
+def process_client_request(client_conn, client_addr):
     """Function to handle client requests"""
-    logging.warning(f"handling connection from {address}")
-    buffer = ""
+    logging.warning(f"Processing new client connection from {client_addr}")
+    message_buffer = ""
     try:
         # Increase socket timeout for large file transfers
-        connection.settimeout(1800)  # 30 minutes timeout
+        client_conn.settimeout(1800)  # 30 minutes timeout
         
         # Increase buffer size for better performance
         while True:
-            data = connection.recv(1024*1024)  # 1MB buffer size
-            if not data:
+            received_data = client_conn.recv(1024*1024)  # 1MB buffer size
+            if not received_data:
                 break
-            buffer += data.decode()
-            while "\r\n\r\n" in buffer:
-                command, buffer = buffer.split("\r\n\r\n", 1)
-                hasil = fp.proses_string(command)
-                response = hasil + "\r\n\r\n"
-                connection.sendall(response.encode())
+            message_buffer += received_data.decode()
+            while "\r\n\r\n" in message_buffer:
+                cmd_string, message_buffer = message_buffer.split("\r\n\r\n", 1)
+                processed_result = protocol_handler.proses_string(cmd_string)
+                server_response = processed_result + "\r\n\r\n"
+                client_conn.sendall(server_response.encode())
     except Exception as e:
-        logging.warning(f"Error: {str(e)}")
+        logging.warning(f"Client processing error: {str(e)}")
     finally:
-        logging.warning(f"connection from {address} closed")
-        connection.close()
+        logging.warning(f"Client connection from {client_addr} has been terminated")
+        client_conn.close()
 
-class Server:
-    def __init__(self, ipaddress='0.0.0.0', port=8889, pool_size=5):
-        self.ipinfo = (ipaddress, port)
-        self.pool_size = pool_size
-        self.my_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+class FileServer:
+    def __init__(self, host_ip='0.0.0.0', server_port=8889, worker_pool_size=5):
+        self.server_address = (host_ip, server_port)
+        self.worker_pool_size = worker_pool_size
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         
         # Set socket timeout
-        self.my_socket.settimeout(1800)  # 30 minutes timeout
-
-    def run(self):
-        logging.warning(f"server running on ip address {self.ipinfo} with thread pool size {self.pool_size}")
-        self.my_socket.bind(self.ipinfo)
-        self.my_socket.listen(5)  # Increased backlog
+        self.server_socket.settimeout(1800)  # 30 minutes timeout    def run(self):
+        logging.warning(f"File server is now running on {self.server_address} with thread pool size {self.worker_pool_size}")
+        self.server_socket.bind(self.server_address)
+        self.server_socket.listen(5)  # Increased backlog
         
         # Create a ThreadPoolExecutor
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.pool_size) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.worker_pool_size) as executor:
             try:
                 while True:
-                    connection, client_address = self.my_socket.accept()
-                    logging.warning(f"connection from {client_address}")
+                    client_connection, client_addr = self.server_socket.accept()
+                    logging.warning(f"New client connection established from {client_addr}")
                     
                     # Submit the client handling task to the thread pool
-                    executor.submit(handle_client, connection, client_address)
+                    executor.submit(process_client_request, client_connection, client_addr)
             except KeyboardInterrupt:
-                logging.warning("Server shutting down")
+                logging.warning("Server is shutting down gracefully")
             finally:
-                if self.my_socket:
-                    self.my_socket.close()
+                if self.server_socket:
+                    self.server_socket.close()
 
 def main():
     # Parse command line arguments
@@ -70,17 +68,17 @@ def main():
     parser.add_argument('--pool-size', type=int, default=5, help='Thread pool size (default: 5)')
     args = parser.parse_args()
     
-    print(f"Starting Threading Pool Server:")
-    print(f"  IP: 0.0.0.0")
-    print(f"  Port: {args.port}")
-    print(f"  Pool Size: {args.pool_size}")
-    print(f"  Press Ctrl+C to stop")
+    print(f"Initializing File Server with Thread Pool:")
+    print(f"  Binding IP: 0.0.0.0")
+    print(f"  Listening Port: {args.port}")
+    print(f"  Worker Pool Size: {args.pool_size}")
+    print(f"  Use Ctrl+C to terminate the server")
     
-    svr = Server(ipaddress='0.0.0.0', port=args.port, pool_size=args.pool_size)
+    file_server = FileServer(host_ip='0.0.0.0', server_port=args.port, worker_pool_size=args.pool_size)
     try:
-        svr.run()
+        file_server.run()
     except KeyboardInterrupt:
-        print("\nServer shutting down...")
+        print("\nShutting down file server gracefully...")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
