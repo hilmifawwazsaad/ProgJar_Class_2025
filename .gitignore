@@ -1,0 +1,23 @@
+*.pyc
+venv/
+.idea/
+
+# Ignore all folders except tugas3, README.md, and test
+environment/
+environment-demo/
+progjar0/
+progjar1/
+progjar1a/
+progjar1b/
+progjar2/
+progjar3/
+progjar4a/
+progjar4b/
+progjar4c/
+progjar4d-irc/
+progjar5/
+progjar6/
+progjar7/
+progjar8/
+progjar9/
+progjar10/
